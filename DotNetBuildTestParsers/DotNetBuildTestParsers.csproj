@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>DotNetBuildTestParsers</RootNamespace>
+    <AssemblyName>DotNetBuildTestParsers</AssemblyName>
+    <Description>Parse dotnet build and dotnet test output to structured errors, warnings, and test results.</Description>
+    <PackageId>DotNetBuildTestParsers</PackageId>
+    <Version>0.1.0</Version>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,6 @@
+{
+  "dotnet-build-test": {
+    "command": "D:\\dotnet-build-test-mcp\\DotnetBuildTestMcp.exe",
+    "args": []
+  }
+}
