@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="DotnetBuildTestMcp.csproj" />
+  <Project Path="DotnetBuildTestMcp.Tests/DotnetBuildTestMcp.Tests.csproj" />
+</Solution>

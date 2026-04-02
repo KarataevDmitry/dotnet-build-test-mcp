@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "mcp_id": "dotnet-build-test-mcp",
+  "title": "Dotnet Build/Test MCP",
+  "tools": [
+    {
+      "name": "build_structured",
+      "description": "Запустить dotnet build с single-flight очередью. По умолчанию возвращает компактный summary; полный raw_output только по include_raw_output=true. Поддерживает wait_for_completion=false (асинхронная job), timeout_seconds и queue backpressure (busy + retry_after_seconds)."
+    },
+    {
+      "name": "run_tests",
+      "description": "Запустить dotnet test с single-flight очередью. По умолчанию возвращает компактный summary; full raw_output только по include_raw_output=true. Поддерживает wait_for_completion=false, timeout_seconds и queue backpressure (busy + retry_after_seconds)."
+    },
+    {
+      "name": "get_job_status",
+      "description": "Получить статус ранее запущенной job: queued/running/done/failed/cancelled/timed_out + итоговый результат, когда job завершена."
+    },
+    {
+      "name": "get_job_log",
+      "description": "Прочитать лог job чанками (offset/limit) для больших выводов."
+    },
+    {
+      "name": "cancel_job",
+      "description": "Отменить queued/running job с понятной причиной отмены в статусе."
+    }
+  ]
+}

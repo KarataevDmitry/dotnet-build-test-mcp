@@ -15,6 +15,14 @@ dotnet publish -c Release -o publish
 
 Junction: например `D:\dotnet-build-test-mcp` → каталог `publish`; в Cursor в mcp.json указать `command`: `D:\dotnet-build-test-mcp\DotnetBuildTestMcp.exe`, `args`: `[]`.
 
+## Каталог тулов (автогенерация)
+
+Полные тексты `description` — в [`docs/MCP-TOOLS.md`](docs/MCP-TOOLS.md); манифест — [`mcp-tools.manifest.json`](mcp-tools.manifest.json). Обновление:
+
+```bash
+dotnet run --project tools/ExportMcpManifest -- --write
+```
+
 ## Тулы
 
 | Имя | Описание | Аргументы |
