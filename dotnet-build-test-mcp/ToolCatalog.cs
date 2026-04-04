@@ -21,7 +21,7 @@ internal static class ToolCatalog
                 type = "object",
                 properties = new
                 {
-                    solution_path = new { type = "string", description = "Путь к .sln или каталогу, в котором искать .sln." },
+                    solution_path = new { type = "string", description = "Путь к .sln или .csproj, либо каталог (ищется .sln; если нет — единственный .csproj)." },
                     wait_for_completion = new { type = "boolean", description = "Ждать завершения операции (по умолчанию true)." },
                     include_raw_output = new { type = "boolean", description = "Включить полный raw_output в ответе (по умолчанию false)." },
                     timeout_seconds = new { type = "integer", description = "Таймаут в секундах (по умолчанию 600)." }
@@ -39,7 +39,7 @@ internal static class ToolCatalog
                 type = "object",
                 properties = new
                 {
-                    solution_path = new { type = "string", description = "Путь к .sln или каталогу, в котором искать .sln." },
+                    solution_path = new { type = "string", description = "Путь к .sln или .csproj, либо каталог (ищется .sln; если нет — единственный .csproj)." },
                     wait_for_completion = new { type = "boolean", description = "Ждать завершения операции (по умолчанию true)." },
                     include_raw_output = new { type = "boolean", description = "Включить полный raw_output в ответе (по умолчанию false)." },
                     timeout_seconds = new { type = "integer", description = "Таймаут в секундах (по умолчанию 900)." }

@@ -74,7 +74,7 @@ static async Task<string> HandleBuildStructuredAsync(
     CancellationToken cancellationToken)
 {
     var request = ParseExecutionRequest(args, defaultTimeoutSeconds: 600);
-    var sln = ResolveSolutionPath(request.SolutionPath);
+    var sln = SolutionOrProjectPathResolver.Resolve(request.SolutionPath);
 
     var enqueued = coordinator.TryEnqueue(
         JobKind.BuildStructured,
@@ -122,7 +122,7 @@ static async Task<string> HandleRunTestsAsync(
     CancellationToken cancellationToken)
 {
     var request = ParseExecutionRequest(args, defaultTimeoutSeconds: 900);
-    var sln = ResolveSolutionPath(request.SolutionPath);
+    var sln = SolutionOrProjectPathResolver.Resolve(request.SolutionPath);
 
     var enqueued = coordinator.TryEnqueue(
         JobKind.RunTests,
@@ -250,24 +250,6 @@ static bool TryGetInt(IReadOnlyDictionary<string, JsonElement> args, string key,
 
     value = 0;
     return false;
-}
-
-static string ResolveSolutionPath(string path)
-{
-    var full = Path.GetFullPath(path.Trim());
-    if (File.Exists(full) && full.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
-        return full;
-
-    if (Directory.Exists(full))
-    {
-        var sln = Directory.GetFiles(full, "*.sln").FirstOrDefault();
-        if (sln is not null)
-            return sln;
-
-        throw new ArgumentException($"No .sln found in directory: {full}");
-    }
-
-    throw new ArgumentException($"Path not found or not a solution: {path}");
 }
 
 sealed record ExecutionRequest(string SolutionPath, bool WaitForCompletion, bool IncludeRawOutput, int TimeoutSeconds);
