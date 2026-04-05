@@ -5,11 +5,15 @@
   "tools": [
     {
       "name": "build_structured",
-      "description": "Запустить dotnet build с single-flight очередью. По умолчанию возвращает компактный summary; полный raw_output только по include_raw_output=true. Поддерживает wait_for_completion=false (асинхронная job), timeout_seconds и queue backpressure (busy + retry_after_seconds)."
+      "description": "Запустить dotnet build с single-flight очередью. По умолчанию возвращает компактный summary; полный raw_output только по include_raw_output=true. Поддерживает wait_for_completion=false (асинхронная job), timeout_seconds и queue backpressure (busy + retry_after_seconds). Опции: configuration (-c), framework (-f), no_restore, additional_arguments."
     },
     {
       "name": "run_tests",
-      "description": "Запустить dotnet test с single-flight очередью. По умолчанию возвращает компактный summary; full raw_output только по include_raw_output=true. Поддерживает wait_for_completion=false, timeout_seconds и queue backpressure (busy + retry_after_seconds)."
+      "description": "Запустить dotnet test с single-flight очередью. По умолчанию возвращает компактный summary; full raw_output только по include_raw_output=true. Поддерживает wait_for_completion=false, timeout_seconds и queue backpressure (busy + retry_after_seconds). Опции: configuration, framework, no_restore, no_build, filter (--filter), additional_arguments."
+    },
+    {
+      "name": "publish_structured",
+      "description": "Запустить dotnet publish с single-flight очередью. Разбор вывода как у build (ошибки/предупреждения MSBuild). Опции: output (-o), configuration, framework, no_restore, no_build, additional_arguments."
     },
     {
       "name": "get_job_status",

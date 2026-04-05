@@ -15,7 +15,7 @@ var toolsList = ToolCatalog.Build();
 
 var options = new McpServerOptions
 {
-    ServerInfo = new Implementation { Name = "DotnetBuildTestMcp", Version = "0.2.0" },
+    ServerInfo = new Implementation { Name = "DotnetBuildTestMcp", Version = "0.3.0" },
     ProtocolVersion = "2024-11-05",
     Capabilities = new ServerCapabilities { Tools = new ToolsCapability { ListChanged = false } },
     Handlers = new McpServerHandlers
@@ -35,6 +35,7 @@ var options = new McpServerOptions
                 {
                     "build_structured" => await HandleBuildStructuredAsync(coordinator, args, cancellationToken).ConfigureAwait(false),
                     "run_tests" => await HandleRunTestsAsync(coordinator, args, cancellationToken).ConfigureAwait(false),
+                    "publish_structured" => await HandlePublishStructuredAsync(coordinator, args, cancellationToken).ConfigureAwait(false),
                     "get_job_status" => HandleGetJobStatus(coordinator, args),
                     "get_job_log" => HandleGetJobLog(coordinator, args),
                     "cancel_job" => HandleCancelJob(coordinator, args),
@@ -80,7 +81,8 @@ static async Task<string> HandleBuildStructuredAsync(
         JobKind.BuildStructured,
         sln,
         request.IncludeRawOutput,
-        request.TimeoutSeconds);
+        request.TimeoutSeconds,
+        request.DotnetOptions);
 
     if (!enqueued.Accepted)
     {
@@ -128,7 +130,57 @@ static async Task<string> HandleRunTestsAsync(
         JobKind.RunTests,
         sln,
         request.IncludeRawOutput,
-        request.TimeoutSeconds);
+        request.TimeoutSeconds,
+        request.DotnetOptions);
+
+    if (!enqueued.Accepted)
+    {
+        return JsonHelper.Serialize(new BusyResponse(
+            accepted: false,
+            status: "busy",
+            retry_after_seconds: enqueued.RetryAfterSeconds,
+            message: "Build/test worker is busy. Retry later."));
+    }
+
+    if (!request.WaitForCompletion)
+    {
+        return JsonHelper.Serialize(new
+        {
+            accepted = true,
+            job_id = enqueued.JobId,
+            status = "queued"
+        });
+    }
+
+    var wait = await coordinator.WaitForCompletionAsync(enqueued.JobId!, cancellationToken).ConfigureAwait(false);
+    if (wait is null)
+    {
+        return JsonHelper.Serialize(new
+        {
+            accepted = true,
+            job_id = enqueued.JobId,
+            status = "queued",
+            message = "Request cancelled while waiting. Use get_job_status."
+        });
+    }
+
+    return wait;
+}
+
+static async Task<string> HandlePublishStructuredAsync(
+    JobCoordinator coordinator,
+    IReadOnlyDictionary<string, JsonElement> args,
+    CancellationToken cancellationToken)
+{
+    var request = ParseExecutionRequest(args, defaultTimeoutSeconds: 900);
+    var sln = SolutionOrProjectPathResolver.Resolve(request.SolutionPath);
+
+    var enqueued = coordinator.TryEnqueue(
+        JobKind.PublishStructured,
+        sln,
+        request.IncludeRawOutput,
+        request.TimeoutSeconds,
+        request.DotnetOptions);
 
     if (!enqueued.Accepted)
     {
@@ -215,7 +267,8 @@ static ExecutionRequest ParseExecutionRequest(IReadOnlyDictionary<string, JsonEl
         ? Math.Clamp(timeout, 5, 3600)
         : defaultTimeoutSeconds;
 
-    return new ExecutionRequest(solutionPath, waitForCompletion, includeRawOutput, timeoutSeconds);
+    var dotnetOptions = DotnetExecutionOptions.Parse(args);
+    return new ExecutionRequest(solutionPath, waitForCompletion, includeRawOutput, timeoutSeconds, dotnetOptions);
 }
 
 static bool TryGetString(IReadOnlyDictionary<string, JsonElement> args, string key, out string? value)
@@ -252,13 +305,19 @@ static bool TryGetInt(IReadOnlyDictionary<string, JsonElement> args, string key,
     return false;
 }
 
-sealed record ExecutionRequest(string SolutionPath, bool WaitForCompletion, bool IncludeRawOutput, int TimeoutSeconds);
+sealed record ExecutionRequest(
+    string SolutionPath,
+    bool WaitForCompletion,
+    bool IncludeRawOutput,
+    int TimeoutSeconds,
+    DotnetExecutionOptions DotnetOptions);
 sealed record BusyResponse(bool accepted, string status, int retry_after_seconds, string message);
 
 enum JobKind
 {
     BuildStructured,
-    RunTests
+    RunTests,
+    PublishStructured
 }
 
 enum JobState
@@ -292,10 +351,15 @@ sealed class JobCoordinator
         _ = Task.Run(ProcessQueueAsync);
     }
 
-    public EnqueueResult TryEnqueue(JobKind kind, string solutionPath, bool includeRawOutput, int timeoutSeconds)
+    public EnqueueResult TryEnqueue(
+        JobKind kind,
+        string solutionPath,
+        bool includeRawOutput,
+        int timeoutSeconds,
+        DotnetExecutionOptions dotnetOptions)
     {
         var jobId = Guid.NewGuid().ToString("N");
-        var envelope = new JobEnvelope(jobId, kind, solutionPath, includeRawOutput, timeoutSeconds);
+        var envelope = new JobEnvelope(jobId, kind, solutionPath, includeRawOutput, timeoutSeconds, dotnetOptions);
         _jobs[jobId] = envelope;
 
         if (!_queue.Writer.TryWrite(envelope))
@@ -332,7 +396,14 @@ sealed class JobCoordinator
         {
             found = true,
             job_id = envelope.Id,
-            tool = envelope.Kind == JobKind.BuildStructured ? "build_structured" : "run_tests",
+            tool = envelope.Kind switch
+            {
+                JobKind.BuildStructured => "build_structured",
+                JobKind.RunTests => "run_tests",
+                JobKind.PublishStructured => "publish_structured",
+                _ => "unknown"
+            },
+            dotnet_options = envelope.DotnetOptions.ToStatusSnapshot(),
             status = envelope.State.ToString().ToLowerInvariant(),
             created_at_utc = envelope.CreatedAtUtc,
             started_at_utc = envelope.StartedAtUtc,
@@ -408,6 +479,7 @@ sealed class JobCoordinator
                 {
                     JobKind.BuildStructured => await ExecuteBuildAsync(job, runtimeCts.Token).ConfigureAwait(false),
                     JobKind.RunTests => await ExecuteTestsAsync(job, runtimeCts.Token).ConfigureAwait(false),
+                    JobKind.PublishStructured => await ExecutePublishAsync(job, runtimeCts.Token).ConfigureAwait(false),
                     _ => throw new InvalidOperationException("Unknown job kind.")
                 };
 
@@ -464,7 +536,7 @@ sealed class JobCoordinator
         var workingDir = Path.GetDirectoryName(job.SolutionPath) ?? "";
         var run = await DotnetRunner.RunAsync(
             workingDir,
-            ["build", job.SolutionPath],
+            DotnetCommandBuilder.BuildBuildArgs(job.SolutionPath, job.DotnetOptions),
             job.TimeoutSeconds,
             cancellationToken,
             line => AddLogLine(job, line)).ConfigureAwait(false);
@@ -498,7 +570,7 @@ sealed class JobCoordinator
         var workingDir = Path.GetDirectoryName(job.SolutionPath) ?? "";
         var run = await DotnetRunner.RunAsync(
             workingDir,
-            ["test", job.SolutionPath, "--logger", "console;verbosity=detailed"],
+            DotnetCommandBuilder.BuildTestArgs(job.SolutionPath, job.DotnetOptions),
             job.TimeoutSeconds,
             cancellationToken,
             line => AddLogLine(job, line)).ConfigureAwait(false);
@@ -512,6 +584,40 @@ sealed class JobCoordinator
             failed = parsed.Failed,
             skipped = parsed.Skipped,
             failed_tests = parsed.FailedTests.Select(t => new { t.Name, t.Message, duration_ms = t.DurationMs }).ToArray(),
+            job_id = job.Id,
+            status = run.TimedOut ? "timed_out" : run.Cancelled ? "cancelled" : "completed",
+            timed_out = run.TimedOut,
+            cancelled = run.Cancelled,
+            failure_reason = run.FailureReason,
+            duration_ms = (int)(DateTimeOffset.UtcNow - (job.StartedAtUtc ?? DateTimeOffset.UtcNow)).TotalMilliseconds,
+            raw_output = job.IncludeRawOutput ? run.Output : null
+        };
+
+        if (run.TimedOut)
+            job.CancelRequested = false;
+
+        return JsonHelper.Serialize(result);
+    }
+
+    private async Task<string> ExecutePublishAsync(JobEnvelope job, CancellationToken cancellationToken)
+    {
+        var workingDir = Path.GetDirectoryName(job.SolutionPath) ?? "";
+        var run = await DotnetRunner.RunAsync(
+            workingDir,
+            DotnetCommandBuilder.BuildPublishArgs(job.SolutionPath, job.DotnetOptions),
+            job.TimeoutSeconds,
+            cancellationToken,
+            line => AddLogLine(job, line)).ConfigureAwait(false);
+
+        var parseInput = run.Output + Environment.NewLine + $"Exit code: {run.ExitCode}";
+        var parsed = BuildOutputParser.Parse(parseInput);
+
+        var result = new
+        {
+            success = parsed.Success && !run.TimedOut && !run.Cancelled,
+            exit_code = parsed.ExitCode,
+            errors = parsed.Errors.Select(e => new { e.File, e.Line, e.Column, e.Code, e.Message }).ToArray(),
+            warnings = parsed.Warnings.Select(w => new { w.File, w.Line, w.Column, w.Code, w.Message }).ToArray(),
             job_id = job.Id,
             status = run.TimedOut ? "timed_out" : run.Cancelled ? "cancelled" : "completed",
             timed_out = run.TimedOut,
@@ -541,13 +647,20 @@ sealed class JobCoordinator
 
 sealed class JobEnvelope
 {
-    public JobEnvelope(string id, JobKind kind, string solutionPath, bool includeRawOutput, int timeoutSeconds)
+    public JobEnvelope(
+        string id,
+        JobKind kind,
+        string solutionPath,
+        bool includeRawOutput,
+        int timeoutSeconds,
+        DotnetExecutionOptions dotnetOptions)
     {
         Id = id;
         Kind = kind;
         SolutionPath = solutionPath;
         IncludeRawOutput = includeRawOutput;
         TimeoutSeconds = timeoutSeconds;
+        DotnetOptions = dotnetOptions;
     }
 
     public string Id { get; }
@@ -555,6 +668,7 @@ sealed class JobEnvelope
     public string SolutionPath { get; }
     public bool IncludeRawOutput { get; }
     public int TimeoutSeconds { get; }
+    public DotnetExecutionOptions DotnetOptions { get; }
     public DateTimeOffset CreatedAtUtc { get; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? StartedAtUtc { get; set; }
     public DateTimeOffset? CompletedAtUtc { get; set; }

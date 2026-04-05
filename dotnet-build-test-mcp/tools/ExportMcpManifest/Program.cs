@@ -20,6 +20,13 @@ if (cliArgs.Contains("--write", StringComparer.Ordinal))
 
     WriteJsonFile(jsonPath, tools);
     var md = McpToolsDocMarkdown.Build(tools.Select(t => (t.Name!, t.Description!)));
+    var appendixPath = Path.Combine(mdDir, "MCP-TOOLS-appendix.md");
+    if (File.Exists(appendixPath))
+        md += File.ReadAllText(appendixPath, Encoding.UTF8);
+
+    if (!md.EndsWith(Environment.NewLine, StringComparison.Ordinal))
+        md += Environment.NewLine;
+
     File.WriteAllText(mdPath, md, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
     Console.Error.WriteLine($"Wrote {jsonPath}");

@@ -107,6 +107,112 @@ public sealed class SolutionOrProjectPathResolverTests
     }
 
     [Fact]
+    public void Resolve_returns_existing_slnx_path()
+    {
+        var dir = Directory.CreateTempSubdirectory("dotnet-mcp-slnx-");
+        try
+        {
+            var slnx = Path.Combine(dir.FullName, "App.slnx");
+            File.WriteAllText(slnx, "<Solution></Solution>");
+
+            var resolved = SolutionOrProjectPathResolver.Resolve(slnx);
+
+            Assert.Equal(Path.GetFullPath(slnx), resolved);
+        }
+        finally
+        {
+            try
+            {
+                dir.Delete(recursive: true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [Fact]
+    public void Resolve_returns_existing_slnf_path()
+    {
+        var dir = Directory.CreateTempSubdirectory("dotnet-mcp-slnf-");
+        try
+        {
+            var slnf = Path.Combine(dir.FullName, "Filter.slnf");
+            File.WriteAllText(slnf, "{ \"solution\": { \"path\": \"x.sln\" } }");
+
+            var resolved = SolutionOrProjectPathResolver.Resolve(slnf);
+
+            Assert.Equal(Path.GetFullPath(slnf), resolved);
+        }
+        finally
+        {
+            try
+            {
+                dir.Delete(recursive: true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [Fact]
+    public void Resolve_directory_prefers_sln_over_slnx()
+    {
+        var dir = Directory.CreateTempSubdirectory("dotnet-mcp-sln-slnx-");
+        try
+        {
+            File.WriteAllText(Path.Combine(dir.FullName, "b.slnx"), "");
+            var sln = Path.Combine(dir.FullName, "a.sln");
+            File.WriteAllText(sln, "");
+
+            var resolved = SolutionOrProjectPathResolver.Resolve(dir.FullName);
+
+            Assert.Equal(Path.GetFullPath(sln), resolved);
+        }
+        finally
+        {
+            try
+            {
+                dir.Delete(recursive: true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [Fact]
+    public void Resolve_directory_uses_slnx_when_no_sln()
+    {
+        var dir = Directory.CreateTempSubdirectory("dotnet-mcp-slnx-only-");
+        try
+        {
+            var slnx = Path.Combine(dir.FullName, "App.slnx");
+            File.WriteAllText(slnx, "");
+            File.WriteAllText(Path.Combine(dir.FullName, "App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+            var resolved = SolutionOrProjectPathResolver.Resolve(dir.FullName);
+
+            Assert.Equal(Path.GetFullPath(slnx), resolved);
+        }
+        finally
+        {
+            try
+            {
+                dir.Delete(recursive: true);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+    }
+
+    [Fact]
     public void Resolve_non_project_file_throws()
     {
         var dir = Directory.CreateTempSubdirectory("dotnet-mcp-txt-");
@@ -116,7 +222,7 @@ public sealed class SolutionOrProjectPathResolverTests
             File.WriteAllText(txt, "x");
 
             var ex = Assert.Throws<ArgumentException>(() => SolutionOrProjectPathResolver.Resolve(txt));
-            Assert.Contains(".csproj", ex.Message);
+            Assert.Contains("solution/project", ex.Message);
         }
         finally
         {

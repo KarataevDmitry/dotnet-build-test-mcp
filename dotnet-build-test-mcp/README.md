@@ -1,6 +1,6 @@
 # Dotnet Build Test MCP
 
-MCP-сервер с двумя тулами: **build_structured** и **run_tests**. Те же контракты, что в Cascade IDE (ide_build, ide_run_tests), но работают без IDE — в Cursor или любом хосте с MCP.
+MCP-сервер с тулами **build_structured**, **run_tests** и **publish_structured** (плюс **get_job_status**, **get_job_log**, **cancel_job**). Те же контракты, что в Cascade IDE (ide_build, ide_run_tests), но работают без IDE — в Cursor или любом хосте с MCP. Поддерживаются типичные флаги CLI: `configuration` (-c), `framework` (-f), `no_restore`, `no_build` (test/publish), `filter` (test), `output` (-o для publish), `additional_arguments`.
 
 ## Стек
 
@@ -17,25 +17,28 @@ Junction: например `D:\dotnet-build-test-mcp` → каталог `publis
 
 ## Каталог тулов (автогенерация)
 
-Полные тексты `description` — в [`docs/MCP-TOOLS.md`](docs/MCP-TOOLS.md); манифест — [`mcp-tools.manifest.json`](mcp-tools.manifest.json). Обновление:
+Полные тексты `description` — в [`docs/MCP-TOOLS.md`](docs/MCP-TOOLS.md) (блок из `ToolCatalog` + примеры JSON из [`docs/MCP-TOOLS-appendix.md`](docs/MCP-TOOLS-appendix.md)); манифест — [`mcp-tools.manifest.json`](mcp-tools.manifest.json). Обновление:
 
 ```bash
 dotnet run --project tools/ExportMcpManifest -- --write
 ```
 
+Примеры для агентов правь в `docs/MCP-TOOLS-appendix.md`, затем снова `--write`.
+
 ## Тулы
 
 | Имя | Описание | Аргументы |
 | ----- | ---------- | ----------- |
-| `build_structured` | Запустить `dotnet build` через single-flight очередь. Поддерживает sync/async режим и timeout. | `solution_path` (required), `wait_for_completion` (default `true`), `include_raw_output` (default `false`), `timeout_seconds` (default `600`) |
-| `run_tests` | Запустить `dotnet test` через single-flight очередь. Поддерживает sync/async режим и timeout. | `solution_path` (required), `wait_for_completion` (default `true`), `include_raw_output` (default `false`), `timeout_seconds` (default `900`) |
-| `get_job_status` | Вернуть статус job: `queued/running/done/failed/cancelled/timed_out` + итоговый result после завершения. | `job_id` |
+| `build_structured` | Запустить `dotnet build` через single-flight очередь. Поддерживает sync/async режим и timeout. | `solution_path` (required), `wait_for_completion`, `include_raw_output`, `timeout_seconds` (default `600`), опционально `configuration`, `framework`, `no_restore`, `additional_arguments` |
+| `run_tests` | Запустить `dotnet test` через single-flight очередь. | `solution_path` (required), те же базовые поля; опционально `configuration`, `framework`, `no_restore`, `no_build`, `filter`, `additional_arguments` |
+| `publish_structured` | Запустить `dotnet publish`, разбор как у build. | `solution_path` (required), `output` (-o), `configuration`, `framework`, `no_restore`, `no_build`, `additional_arguments` |
+| `get_job_status` | Вернуть статус job: `queued/running/done/failed/cancelled/timed_out` + итоговый result после завершения; в ответе поле `dotnet_options`. | `job_id` |
 | `get_job_log` | Читать лог job чанками (offset/limit), чтобы не отдавать гигантский payload одним JSON. | `job_id`, `offset_lines` (default `0`), `limit_lines` (default `200`, max `2000`) |
 | `cancel_job` | Отменить queued/running job. | `job_id` |
 
 ## Поведение очереди (single-flight)
 
-- Тяжёлые операции (`build_structured`, `run_tests`) выполняются **строго по одной**.
+- Тяжёлые операции (`build_structured`, `run_tests`, `publish_structured`) выполняются **строго по одной**.
 - Очередь bounded (`capacity=8`).
 - При перегрузе возвращается компактный ответ:
   - `accepted: false`
