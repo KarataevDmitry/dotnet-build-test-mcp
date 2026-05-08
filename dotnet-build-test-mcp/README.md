@@ -15,6 +15,18 @@ dotnet publish -c Release -o publish
 
 Junction: например `D:\dotnet-build-test-mcp` → каталог `publish`; в Cursor в mcp.json указать `command`: `D:\dotnet-build-test-mcp\DotnetBuildTestMcp.exe`, `args`: `[]`.
 
+### Быстрый локальный publish (рекомендуется)
+
+`publish-and-deploy.ps1` делает publish self-contained `win-x64`, зеркалит в фиксированный путь (по умолчанию `D:\dotnet-build-test-mcp`) и гасит процесс, если он лочит файлы:
+
+```powershell
+.\publish-and-deploy.ps1
+```
+
+### Релизы (zip + GitLab upload)
+
+`scripts/publish-release-win.ps1` — мультиплатформенный сценарий (win/linux/osx): упаковка в zip и загрузка в GitLab Generic Packages/Release.
+
 ## Каталог тулов (автогенерация)
 
 Полные тексты `description` — в [`docs/MCP-TOOLS.md`](docs/MCP-TOOLS.md) (блок из `ToolCatalog` + примеры JSON из [`docs/MCP-TOOLS-appendix.md`](docs/MCP-TOOLS-appendix.md)); манифест — [`mcp-tools.manifest.json`](mcp-tools.manifest.json). Обновление:

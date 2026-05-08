@@ -1,0 +1,10 @@
+bin/
+obj/
+publish/
+publish-release/
+.vs/
+*.user
+*.suo
+*.nupkg
+.cascade-ide/
+
